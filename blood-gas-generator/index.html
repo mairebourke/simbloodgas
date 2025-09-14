@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blood Gas Report Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f7f6;
+        }
+        .container {
+            background: white;
+            padding: 2rem 3rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            height: 120px;
+            margin-bottom: 1rem;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            resize: vertical;
+        }
+        select, button {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+            font-weight: bold;
+            margin-top: 1rem;
+        }
+        button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            margin-top: 1rem;
+            min-height: 20px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Blood Gas Report Generator</h1>
+
+        <label for="scenarioInput">Enter Clinical Scenario:</label>
+        <textarea id="scenarioInput" placeholder="e.g., A 68-year-old male with a history of COPD presents with worsening shortness of breath..."></textarea>
+        
+        <label for="gasTypeSelect">Select Sample Type:</label>
+        <select id="gasTypeSelect">
+            <option value="Arterial">Arterial</option>
+            <option value="Venous">Venous</option>
+        </select>
+
+        <button id="generateBtn">Download PDF Report</button>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        // Get references to our HTML elements
+        const generateBtn = document.getElementById('generateBtn');
+        const scenarioInput = document.getElementById('scenarioInput');
+        const gasTypeSelect = document.getElementById('gasTypeSelect');
+        const statusDiv = document.getElementById('status');
+
+        // Main function to handle the generation and download
+        async function generateAndDownloadPdf() {
+            // 1. Get user input
+            const scenario = scenarioInput.value.trim();
+            const gasType = gasTypeSelect.value;
+
+            // Simple validation
+            if (!scenario) {
+                statusDiv.textContent = 'Please enter a clinical scenario.';
+                return;
+            }
+
+            // 2. Set loading state
+            generateBtn.disabled = true;
+            statusDiv.textContent = 'Generating report... Please wait.';
+
+            try {
+                // 3. Call our Netlify serverless function
+                const response = await fetch('/.netlify/functions/generate-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scenario, gasType })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate report.');
+                }
+                
+                const data = await response.json();
+                const reportText = data.report;
+
+                // 4. Generate the PDF using jsPDF
+                statusDiv.textContent = 'Creating PDF...';
+                
+                // Initialize jsPDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // CRITICAL: Use a monospaced font to preserve the alignment of your report
+                doc.setFont('Courier', 'normal');
+                doc.setFontSize(9); // A smaller font size often works best for fitting the text
+                
+                // Add the report text to the PDF
+                doc.text(reportText, 10, 15); // x=10, y=15 are the start coordinates
+                
+                // 5. Trigger the download
+                doc.save('blood-gas-report.pdf');
+                statusDiv.textContent = 'Download complete!';
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                // 6. Reset the button state
+                generateBtn.disabled = false;
+                setTimeout(() => { if (statusDiv.textContent !== 'Please enter a clinical scenario.') statusDiv.textContent = ''; }, 5000);
+            }
+        }
+
+        // Attach the function to the button's click event
+        generateBtn.addEventListener('click', generateAndDownloadPdf);
+    </script>
+
+</body>
+</html>
