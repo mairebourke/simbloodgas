@@ -1,2 +1,3 @@
 [build]
+  base = "blood-gas-generator"
   functions = "netlify/functions/"
